@@ -85,6 +85,20 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         }
     }
 
+    pub fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: &Color) {
+        self.pixels[y][x][1..4].copy_from_slice(color);
+    }
+
+    pub fn set_pixels_unchecked(&mut self, positions: &[(usize, usize)], color: &Color) {
+        // Convert the color to a softbuffer value.
+        let mut rgb = [0; 4];
+        rgb[1..4].copy_from_slice(color);
+        // Copy the color into each position.
+        for position in positions {
+            self.pixels[position.1][position.0] = rgb;
+        }
+    }
+
     pub fn fill_rectangle_unchecked(
         &mut self,
         x: usize,
@@ -102,20 +116,6 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         self.pixels[y..y + h]
             .iter_mut()
             .for_each(|row| row[x..x + w].copy_from_slice(rgbs));
-    }
-
-    pub fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: &Color) {
-        self.pixels[x][y][1..4].copy_from_slice(color);
-    }
-
-    pub fn set_pixels_unchecked(&mut self, positions: &[(usize, usize)], color: &Color) {
-        // Convert the color to a softbuffer value.
-        let mut rgb = [0; 4];
-        rgb[1..4].copy_from_slice(color);
-        // Fast-copy.
-        positions
-            .iter()
-            .for_each(|(x, y)| self.pixels[*x][*y].copy_from_slice(&rgb));
     }
 
     fn is_valid_position(x: usize, y: usize) -> bool {

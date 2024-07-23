@@ -54,7 +54,7 @@ impl ApplicationHandler for App {
             let b = 5;
             rgb_buffer.set_pixel_unchecked(x, y, &[r, g, b]);
             // Check that the pixel was set.
-            assert_eq!(rgb_buffer.pixels[x][y], [0, r, g, b]);
+            assert_eq!(rgb_buffer.pixels[y][x], [0, r, g, b]);
             let softbuffer_value = u32::from_le_bytes([0, r, g, b]);
             // Test the u32 value.
             assert_eq!(rgb_buffer.buffer[index(x, y)], softbuffer_value);
@@ -85,13 +85,13 @@ impl ApplicationHandler for App {
                 dts.iter().sum::<f64>() / dts.iter().len() as f64
             );
             // Test raw softbuffer.
-            let color = u32::from_le_bytes([0, r, g, b]);
+            let sb_color = u32::from_le_bytes([0, r, g, b]);
             let mut dts = [0.0; ITS];
             for dt in dts.iter_mut() {
                 let t0 = Instant::now();
                 for x1 in x..x + w {
                     for y1 in y..y + h {
-                        rgb_buffer.buffer[index(x1, y1)] = color;
+                        rgb_buffer.buffer[index(x1, y1)] = sb_color;
                     }
                 }
                 *dt = (Instant::now() - t0).as_secs_f64();
@@ -100,6 +100,39 @@ impl ApplicationHandler for App {
                 "softbuffer: {}s",
                 dts.iter().sum::<f64>() / dts.iter().len() as f64
             );
+
+            // Set per-pixel.
+            println!("\nSet every pixel individually:");
+            let t0 = Instant::now();
+            let color = [r, g, b];
+            for x in 0..X {
+                for y in 0..Y {
+                    rgb_buffer.set_pixel_unchecked(x, y, &color);
+                }
+            }
+            println!("softbuffer-rgb: {}s", (Instant::now() - t0).as_secs_f64());
+            let color = [r, g, b];
+            let mut positions = vec![];
+            for x in 0..X {
+                for y in 0..Y {
+                    positions.push((x, y));
+                }
+            }
+
+            let t0 = Instant::now();
+            rgb_buffer.set_pixels_unchecked(&positions, &color);
+            println!(
+                "softbuffer-rgb (set_pixels_unchecked): {}s",
+                (Instant::now() - t0).as_secs_f64()
+            );
+
+            let t0 = Instant::now();
+            for x in 0..X {
+                for y in 0..Y {
+                    rgb_buffer.buffer[index(x, y)] = sb_color;
+                }
+            }
+            println!("softbuffer: {}s", (Instant::now() - t0).as_secs_f64());
 
             // End.
             event_loop.exit();
@@ -111,5 +144,5 @@ impl ApplicationHandler for App {
 
 #[inline]
 fn index(x: usize, y: usize) -> usize {
-    x * X + y
+    y * X + x
 }
