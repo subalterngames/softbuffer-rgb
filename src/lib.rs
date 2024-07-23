@@ -12,32 +12,39 @@ pub enum RgbBufferError {
     InvalidPosition(usize, usize),
 }
 
-type Color = [u8; 3];
+pub type Color = [u8; 3];
 
 pub struct RgbBuffer<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle> {
+    /// The "raw" softbuffer buffer.
     pub buffer: Buffer<'s, D, W>,
+    /// The "raw" RGB pixel data as a 3D array where the axes are: `Y`, `X`, and 4 (XRGB).
+    /// Note that the order is: `Y, X`. Therefore, to get the pixel at `x=4, y=5`: `self.pixels[y][x]`.
+    /// The color has four elements. The first element should always be 0, and the other three are R, G, and B.
     pub pixels: &'s mut [[[u8; 4]; X]],
 }
 
 impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle>
     RgbBuffer<'s, X, Y, D, W>
 {
-    pub fn from_softbuffer(mut value: Buffer<'s, D, W>) -> Result<Self, RgbBufferError> {
+    /// Convert a `Buffer` into an `RgbBuffer`. This consumes `buffer` and returns an `RgbBuffer`.
+    /// This returns an `Err` if `X * Y != buffer.len()` (i.e. if the dimensions of the `RgbBuffer` are incorrect).
+    pub fn from_softbuffer(mut buffer: Buffer<'s, D, W>) -> Result<Self, RgbBufferError> {
         // Test whether the dimensions are valid.
-        if X * Y != value.len() {
+        if X * Y != buffer.len() {
             Err(RgbBufferError::InvalidSize(X, Y))
         } else {
             // Convert the raw buffer to an array of rows.
-            let ptr = value.as_mut_ptr() as *mut [[u8; 4]; X];
+            let ptr = buffer.as_mut_ptr() as *mut [[u8; 4]; X];
             // Get the 3D pixel array.
             let pixels = unsafe { slice::from_raw_parts_mut(ptr, Y) };
-            Ok(RgbBuffer {
-                buffer: value,
-                pixels,
-            })
+            Ok(RgbBuffer { buffer, pixels })
         }
     }
 
+    /// Set the color of a single pixel.
+    /// `color` is the `[r, g, b]` color.
+    ///
+    /// Returns an `Err` if `(x, y)` is out of bounds.
     pub fn set_pixel(&mut self, x: usize, y: usize, color: &Color) -> Result<(), RgbBufferError> {
         if !Self::is_valid_position(x, y) {
             Err(RgbBufferError::InvalidPosition(x, y))
@@ -47,6 +54,12 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         }
     }
 
+    /// Set the color of multiple pixels.
+    ///
+    /// - `positions`: A slice of `(x, y)` positions.
+    /// - `color`: The `[r, g, b]` color.
+    ///
+    /// Returns an `Err` if any position in `positions` is out of bounds.
     pub fn set_pixels(
         &mut self,
         positions: &[(usize, usize)],
@@ -62,11 +75,13 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         Ok(())
     }
 
-    pub fn fill(&mut self, color: &Color) {
-        self.buffer
-            .fill(u32::from_le_bytes([0, color[0], color[1], color[2]]));
-    }
-
+    /// Fill a rectangle with a color.
+    /// 
+    /// - `x` and `y` are the coordinates of the top-left pixel.
+    /// - `w` and `h` are the width and height of the rectangle.
+    /// - `color` is the `[r, g, b]` color.
+    /// 
+    /// Returns an `Err` if the top-left or bottom-right positions are out of bounds.
     pub fn fill_rectangle(
         &mut self,
         x: usize,
@@ -85,10 +100,26 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         }
     }
 
+    /// Fill the buffer with an `[r, g, b]` color.
+    pub fn fill(&mut self, color: &Color) {
+        self.buffer
+            .fill(u32::from_le_bytes([0, color[0], color[1], color[2]]));
+    }
+
+    /// Set the color of a single pixel.
+    /// `color` is the `[r, g, b]` color.
+    ///
+    /// Panics if `(x, y)` is out of bounds.
     pub fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: &Color) {
         self.pixels[y][x][1..4].copy_from_slice(color);
     }
 
+    /// Set the color of multiple pixels.
+    ///
+    /// - `positions`: A slice of `(x, y)` positions.
+    /// - `color`: The `[r, g, b]` color.
+    ///
+    /// Panics if any position in `positions` is out of bounds.
     pub fn set_pixels_unchecked(&mut self, positions: &[(usize, usize)], color: &Color) {
         // Convert the color to a softbuffer value.
         let mut rgb = [0; 4];
@@ -99,6 +130,13 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         }
     }
 
+    /// Fill a rectangle with a color.
+    /// 
+    /// - `x` and `y` are the coordinates of the top-left pixel.
+    /// - `w` and `h` are the width and height of the rectangle.
+    /// - `color` is the `[r, g, b]` color.
+    /// 
+    /// Panics if the top-left or bottom-right positions are out of bounds.
     pub fn fill_rectangle_unchecked(
         &mut self,
         x: usize,
