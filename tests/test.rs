@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use softbuffer::{Context, Surface};
 use std::num::NonZeroU32;
 use winit::application::ApplicationHandler;
@@ -7,6 +9,10 @@ use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use softbuffer_rgb::RgbBuffer;
+
+const X: usize = 400;
+const Y: usize = 300;
+const ITS: usize = 10;
 
 fn main() {
     let mut app = App::default();
@@ -24,8 +30,6 @@ impl ApplicationHandler for App {
 
     fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
         if let StartCause::Init = cause {
-            const X: usize = 400;
-            const Y: usize = 300;
             let window_attributes =
                 WindowAttributes::default().with_inner_size(LogicalSize::new(X as u32, Y as u32));
             // Create the window.
@@ -53,7 +57,7 @@ impl ApplicationHandler for App {
             assert_eq!(rgb_buffer.pixels[x][y], [0, r, g, b]);
             let softbuffer_value = u32::from_le_bytes([0, r, g, b]);
             // Test the u32 value.
-            assert_eq!(rgb_buffer.buffer[x * X + y], softbuffer_value);
+            assert_eq!(rgb_buffer.buffer[index(x, y)], softbuffer_value);
             // This is ok.
             assert!(rgb_buffer
                 .fill_rectangle(20, 20, 200, 50, &[67, 200, 80])
@@ -65,9 +69,47 @@ impl ApplicationHandler for App {
             // Test the fill value.
             rgb_buffer.fill(&[r, g, b]);
             assert!(rgb_buffer.buffer.iter().all(|v| *v == softbuffer_value));
+
+            let mut dts = [0.0; ITS];
+            let x = 30;
+            let y = 20;
+            let w = 200;
+            let h = 100;
+            for dt in dts.iter_mut() {
+                let t0 = Instant::now();
+                rgb_buffer.fill_rectangle_unchecked(x, y, w, h, &[r, g, b]);
+                *dt = (Instant::now() - t0).as_secs_f64();
+            }
+            println!(
+                "Draw a rectangle:\nsoftbuffer-rgb: {}s",
+                dts.iter().sum::<f64>() / dts.iter().len() as f64
+            );
+            // Test raw softbuffer.
+            let color = u32::from_le_bytes([0, r, g, b]);
+            let mut dts = [0.0; ITS];
+            for dt in dts.iter_mut() {
+                let t0 = Instant::now();
+                for x1 in x..x + w {
+                    for y1 in y..y + h {
+                        rgb_buffer.buffer[index(x1, y1)] = color;
+                    }
+                }
+                *dt = (Instant::now() - t0).as_secs_f64();
+            }
+            println!(
+                "softbuffer: {}s",
+                dts.iter().sum::<f64>() / dts.iter().len() as f64
+            );
+
+            // End.
             event_loop.exit();
         }
     }
 
     fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
+}
+
+#[inline]
+fn index(x: usize, y: usize) -> usize {
+    x * X + y
 }
