@@ -40,7 +40,8 @@ impl ApplicationHandler for App {
                     NonZeroU32::new(Y as u32).unwrap(),
                 )
                 .unwrap();
-            let mut rgb_buffer: RgbBuffer<X, Y, _, _> = surface.buffer_mut().unwrap().into();
+            let mut rgb_buffer =
+                RgbBuffer::<X, Y, _, _>::from_softbuffer(surface.buffer_mut().unwrap()).unwrap();
             // Set a pixel.
             let x = 12;
             let y = 14;
@@ -50,8 +51,20 @@ impl ApplicationHandler for App {
             rgb_buffer.set_pixel_unchecked(x, y, &[r, g, b]);
             // Check that the pixel was set.
             assert_eq!(rgb_buffer.pixels[x][y], [0, r, g, b]);
+            let softbuffer_value = u32::from_le_bytes([0, r, g, b]);
             // Test the u32 value.
-            assert_eq!(rgb_buffer.buffer[x * Y + y], u32::from_le_bytes([0, r, g, b]));
+            assert_eq!(rgb_buffer.buffer[x * X + y], softbuffer_value);
+            // This is ok.
+            assert!(rgb_buffer
+                .fill_rectangle(20, 20, 200, 50, &[67, 200, 80])
+                .is_ok());
+            // This is not ok.
+            assert!(rgb_buffer
+                .fill_rectangle(20, 20, Y * 3, 50, &[67, 200, 80])
+                .is_err());
+            // Test the fill value.
+            rgb_buffer.fill(&[r, g, b]);
+            assert!(rgb_buffer.buffer.iter().all(|v| *v == softbuffer_value));
             event_loop.exit();
         }
     }
