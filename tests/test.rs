@@ -50,11 +50,8 @@ impl ApplicationHandler for App {
             rgb_buffer.set_pixel_unchecked(x, y, &[r, g, b]);
             // Check that the pixel was set.
             assert_eq!(rgb_buffer.pixels[x][y], [0, r, g, b]);
-            // Get the index.
-            let i = x * Y + y;
-            assert_eq!(i, 3614);
-            // Get the value.
-            assert_eq!(rgb_buffer.buffer[i], u32::from_le_bytes([0, r, g, b]));
+            // Test the u32 value.
+            assert_eq!(rgb_buffer.buffer[x * Y + y], u32::from_le_bytes([0, r, g, b]));
             event_loop.exit();
         }
     }
