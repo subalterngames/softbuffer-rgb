@@ -76,19 +76,19 @@ pub type Color = [u8; 3];
 /// An `RgbBuffer` contains a softbuffer `buffer` and `pixels`, a mutable slice of the same data.
 /// `buffer` and `pixels` reference the same underlying data.
 /// Modifying the elements of one will affect the values of the other.
-/// 
+///
 /// In terms of speed:
-/// 
+///
 /// - Setting values in `pixels` is approximately 6 times faster than setting raw values in `buffer` because you don't need to convert (x, y) coordinates to index values.
 /// - `set_pixel_unchecked(x, y, color)` is slightly slower than setting raw values in `buffer`.
 /// - `set_pixels_unchecked(positions, color)` is approximately 10 times faster than setting raw values in `buffer` (assuming that you've already cached `positions`).
 /// - `fill(color)` is the same speed as `buffer.fill(value)`.
 /// - `fill_rectangle_unchecked(x, y, w, h, color)` is *100 times faster* than filling a rectangle in the raw `buffer`.
-/// 
+///
 /// Many functions have checked and unchecked versions.
 /// The checked functions will check whether all values are within the bounds of `pixels`.
 /// The unchecked functions don't do this and are therefore faster.
-/// 
+///
 /// In `self.pixels`, color data is represented as a 4-element array where the first element is always 0.
 /// This will align the color data correctly for `softbuffer`.
 /// In all functions, `color` is a 3-element array that internally is converted into a valid 4-element array.

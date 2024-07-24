@@ -1,3 +1,4 @@
+use std::slice;
 use std::time::Instant;
 
 use softbuffer::{Context, Surface};
@@ -12,6 +13,7 @@ use softbuffer_rgb::RgbBuffer;
 
 const X: usize = 400;
 const Y: usize = 300;
+const COLORS: &[u8; X * Y * 3] = include_bytes!("colors");
 const ITS: usize = 10;
 
 fn main() {
@@ -46,6 +48,79 @@ impl ApplicationHandler for App {
                 .unwrap();
             let mut rgb_buffer =
                 RgbBuffer::<X, Y, _, _>::from_softbuffer(surface.buffer_mut().unwrap()).unwrap();
+
+            // Set random colors for every pixel.
+            println!("Set every pixel to a random color:");
+
+            // Convert `COLORS` into a 3D RGB array.
+            let ptr = COLORS.as_ptr() as *const [[u8; 3]; X];
+            let rgb3 = unsafe { slice::from_raw_parts(ptr, Y) };
+
+            // Convert `COLORS` into u32s.
+            let mut u32s = [[0; Y]; X];
+            for (x, row) in rgb3.iter().enumerate() {
+                for (y, color) in row.iter().enumerate() {
+                    u32s[y][x] = u32::from_le_bytes([
+                        0,
+                        color[0],
+                        color[1],
+                        color[2],
+                    ]);
+                }
+            }
+
+            // Raw softbuffer.
+            let mut t0 = Instant::now();
+            for x in 0..X {
+                for y in 0..Y {
+                    rgb_buffer.buffer[index(x, y)] = u32s[x][y];
+                }
+            }
+            println!("softbuffer: {}s", (Instant::now() - t0).as_secs_f64());
+
+            // Raw pixels.
+            // Convert `COLORS` into a 4D XRGB array.
+            let mut rgb4 = [[[0u8; 4]; Y]; X];
+            for (x, row) in rgb3.iter().enumerate() {
+                for (y, color) in row.iter().enumerate() {
+                    rgb4[y][x] = [0, color[0], color[1], color[2]];
+                }
+            }
+            t0 = Instant::now();
+            for x in 0..X {
+                for y in 0..Y {
+                    rgb_buffer.pixels[y][x] = rgb4[x][y];
+                }
+            }
+            println!(
+                "softbuffer-rgb (`self.pixels`): {}s",
+                (Instant::now() - t0).as_secs_f64()
+            );
+
+            // `set_pixel`
+            t0 = Instant::now();
+            for x in 0..X {
+                for y in 0..Y {
+                    let _ = rgb_buffer.set_pixel(x, y, &rgb3[y][x]);
+                }
+            }
+            println!(
+                "softbuffer-rgb (`self.set_pixel(x, y, color)`): {}s",
+                (Instant::now() - t0).as_secs_f64()
+            );
+
+            // `set_pixel_unchecked`
+            t0 = Instant::now();
+            for x in 0..X {
+                for y in 0..Y {
+                    rgb_buffer.set_pixel_unchecked(x, y, &rgb3[y][x]);
+                }
+            }
+            println!(
+                "softbuffer-rgb (`self.set_pixel_unchecked(x, y, color)`): {}s",
+                (Instant::now() - t0).as_secs_f64()
+            );
+
             // Set a pixel.
             let x = 12;
             let y = 14;
