@@ -149,6 +149,7 @@ impl ApplicationHandler for App {
             let y = 20;
             let w = 200;
             let h = 100;
+            println!("");
             println!("Draw a rectangle:");
             // Test raw softbuffer.
             let sb_color = u32::from_le_bytes([0, r, g, b]);
