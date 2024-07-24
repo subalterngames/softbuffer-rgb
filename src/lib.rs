@@ -76,11 +76,11 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
     }
 
     /// Fill a rectangle with a color.
-    /// 
+    ///
     /// - `x` and `y` are the coordinates of the top-left pixel.
     /// - `w` and `h` are the width and height of the rectangle.
     /// - `color` is the `[r, g, b]` color.
-    /// 
+    ///
     /// Returns an `Err` if the top-left or bottom-right positions are out of bounds.
     pub fn fill_rectangle(
         &mut self,
@@ -131,11 +131,11 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
     }
 
     /// Fill a rectangle with a color.
-    /// 
+    ///
     /// - `x` and `y` are the coordinates of the top-left pixel.
     /// - `w` and `h` are the width and height of the rectangle.
     /// - `color` is the `[r, g, b]` color.
-    /// 
+    ///
     /// Panics if the top-left or bottom-right positions are out of bounds.
     pub fn fill_rectangle_unchecked(
         &mut self,

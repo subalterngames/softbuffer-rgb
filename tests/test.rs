@@ -70,20 +70,11 @@ impl ApplicationHandler for App {
             rgb_buffer.fill(&[r, g, b]);
             assert!(rgb_buffer.buffer.iter().all(|v| *v == softbuffer_value));
 
-            let mut dts = [0.0; ITS];
             let x = 30;
             let y = 20;
             let w = 200;
             let h = 100;
-            for dt in dts.iter_mut() {
-                let t0 = Instant::now();
-                rgb_buffer.fill_rectangle_unchecked(x, y, w, h, &[r, g, b]);
-                *dt = (Instant::now() - t0).as_secs_f64();
-            }
-            println!(
-                "Draw a rectangle:\nsoftbuffer-rgb: {}s",
-                dts.iter().sum::<f64>() / dts.iter().len() as f64
-            );
+            println!("Draw a rectangle:");
             // Test raw softbuffer.
             let sb_color = u32::from_le_bytes([0, r, g, b]);
             let mut dts = [0.0; ITS];
@@ -100,32 +91,21 @@ impl ApplicationHandler for App {
                 "softbuffer: {}s",
                 dts.iter().sum::<f64>() / dts.iter().len() as f64
             );
+            let mut dts = [0.0; ITS];
+            for dt in dts.iter_mut() {
+                let t0 = Instant::now();
+                rgb_buffer.fill_rectangle_unchecked(x, y, w, h, &[r, g, b]);
+                *dt = (Instant::now() - t0).as_secs_f64();
+            }
+            println!(
+                "softbuffer-rgb: {}s",
+                dts.iter().sum::<f64>() / dts.iter().len() as f64
+            );
 
             // Set per-pixel.
             println!("\nSet every pixel individually:");
-            let t0 = Instant::now();
-            let color = [r, g, b];
-            for x in 0..X {
-                for y in 0..Y {
-                    rgb_buffer.set_pixel_unchecked(x, y, &color);
-                }
-            }
-            println!("softbuffer-rgb: {}s", (Instant::now() - t0).as_secs_f64());
-            let color = [r, g, b];
-            let mut positions = vec![];
-            for x in 0..X {
-                for y in 0..Y {
-                    positions.push((x, y));
-                }
-            }
 
-            let t0 = Instant::now();
-            rgb_buffer.set_pixels_unchecked(&positions, &color);
-            println!(
-                "softbuffer-rgb (set_pixels_unchecked): {}s",
-                (Instant::now() - t0).as_secs_f64()
-            );
-
+            // Set with raw softbuffer.
             let t0 = Instant::now();
             for x in 0..X {
                 for y in 0..Y {
@@ -133,6 +113,46 @@ impl ApplicationHandler for App {
                 }
             }
             println!("softbuffer: {}s", (Instant::now() - t0).as_secs_f64());
+
+            // Set with `set_pixel_unchecked`
+            let t0 = Instant::now();
+            let color = [r, g, b];
+            for x in 0..X {
+                for y in 0..Y {
+                    rgb_buffer.set_pixel_unchecked(x, y, &color);
+                }
+            }
+            println!(
+                "softbuffer-rgb (set_pixel_unchecked): {}s",
+                (Instant::now() - t0).as_secs_f64()
+            );
+
+            // Set by setting raw pixel data.
+            let t0 = Instant::now();
+            let color_4 = [0, r, g, b];
+            for x in 0..X {
+                for y in 0..Y {
+                    rgb_buffer.pixels[y][x] = color_4;
+                }
+            }
+            println!(
+                "softbuffer-rgb (raw pixels): {}s",
+                (Instant::now() - t0).as_secs_f64()
+            );
+
+            // Set by `set_pixels_unchecked`.
+            let mut positions = vec![];
+            for x in 0..X {
+                for y in 0..Y {
+                    positions.push((x, y));
+                }
+            }
+            let t0 = Instant::now();
+            rgb_buffer.set_pixels_unchecked(&positions, &color);
+            println!(
+                "softbuffer-rgb (set_pixels_unchecked): {}s",
+                (Instant::now() - t0).as_secs_f64()
+            );
 
             // End.
             event_loop.exit();
