@@ -145,7 +145,10 @@ impl ApplicationHandler for App {
             // Convert raw bytes to values.
             let mut positions = vec![];
             for raw_position in HELLO_WORLD.chunks_exact(4) {
-                positions.push((u16::from_le_bytes([raw_position[0], raw_position[1]]) as usize, u16::from_le_bytes([raw_position[2], raw_position[3]]) as usize));
+                positions.push((
+                    u16::from_le_bytes([raw_position[0], raw_position[1]]) as usize,
+                    u16::from_le_bytes([raw_position[2], raw_position[3]]) as usize,
+                ));
             }
 
             println!("");

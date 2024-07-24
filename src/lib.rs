@@ -69,6 +69,8 @@ pub enum RgbBufferError {
     InvalidSize(usize, usize),
     #[error("Invalid (x, y) coordinates: ({0}, {1})")]
     InvalidPosition(usize, usize),
+    #[error("The slices within pixels have differing lengths.")]
+    NonUniformLengths,
 }
 
 pub type Color = [u8; 3];
@@ -76,19 +78,19 @@ pub type Color = [u8; 3];
 /// An `RgbBuffer` contains a softbuffer `buffer` and `pixels`, a mutable slice of the same data.
 /// `buffer` and `pixels` reference the same underlying data.
 /// Modifying the elements of one will affect the values of the other.
-/// 
+///
 /// In terms of speed:
-/// 
+///
 /// - Setting values in `pixels` is approximately 6 times faster than setting raw values in `buffer` because you don't need to convert (x, y) coordinates to index values.
 /// - `set_pixel_unchecked(x, y, color)` is slightly slower than setting raw values in `buffer`.
 /// - `set_pixels_unchecked(positions, color)` is approximately 10 times faster than setting raw values in `buffer` (assuming that you've already cached `positions`).
 /// - `fill(color)` is the same speed as `buffer.fill(value)`.
 /// - `fill_rectangle_unchecked(x, y, w, h, color)` is *100 times faster* than filling a rectangle in the raw `buffer`.
-/// 
+///
 /// Many functions have checked and unchecked versions.
 /// The checked functions will check whether all values are within the bounds of `pixels`.
 /// The unchecked functions don't do this and are therefore faster.
-/// 
+///
 /// In `self.pixels`, color data is represented as a 4-element array where the first element is always 0.
 /// This will align the color data correctly for `softbuffer`.
 /// In all functions, `color` is a 3-element array that internally is converted into a valid 4-element array.
@@ -179,6 +181,35 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         }
     }
 
+    pub fn blit(&mut self, x: usize, y: usize, pixels: &[&[Color]]) -> Result<(), RgbBufferError> {
+        if !Self::is_valid_position(x, y) {
+            Err(RgbBufferError::InvalidPosition(x, y))
+        } else {
+            // Fail silently.
+            if pixels.len() == 0 {
+                Ok(())
+            } else {
+                // Check if the columns are all the same size.
+                let le = pixels[0].len();
+                if !pixels.iter().all(|row| row.len() != le) {
+                    Err(RgbBufferError::NonUniformLengths)
+                } else {
+                    // Check the bottom-right corner.
+                    let x1 = x + pixels.len();
+                    let y1 = y + le;
+                    if !Self::is_valid_position(x1, y1) {
+                        Err(RgbBufferError::InvalidPosition(x1, y1))
+                    }
+                    // Blit.
+                    else {
+                        self.blit_unchecked(x, y, pixels);
+                        Ok(())
+                    }
+                }
+            }
+        }
+    }
+
     /// Fill the buffer with an `[r, g, b]` color.
     pub fn fill(&mut self, color: &Color) {
         self.buffer
@@ -233,6 +264,16 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         self.pixels[y..y + h]
             .iter_mut()
             .for_each(|row| row[x..x + w].copy_from_slice(rgbs));
+    }
+
+    pub fn blit_unchecked(&mut self, x: usize, y: usize, pixels: &[&[Color]]) {
+        pixels
+            .iter()
+            .flat_map(|row| row.iter().enumerate())
+            .zip(0..pixels.len())
+            .for_each(|((y1, color), x1)| {
+                self.set_pixel_unchecked(x + x1, y + y1, color);
+            });
     }
 
     fn is_valid_position(x: usize, y: usize) -> bool {
