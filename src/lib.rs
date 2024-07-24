@@ -1,6 +1,65 @@
+//! **`sotfbuffer-rgb` is a thin wrapper around `softbuffer` that exposes raw buffer data as a 3D array: `(width, height, color)`.**
+//! The result is much easier to work with while being just as fast as `softbuffer`, and in some cases significantly faster.
+//!
+//! ```rust
+//!use softbuffer::{Context, Surface};
+//!use std::num::NonZeroU32;
+//!use winit::application::ApplicationHandler;
+//!use winit::dpi::LogicalSize;
+//!use winit::event::{StartCause, WindowEvent};
+//!use winit::event_loop::{ActiveEventLoop, EventLoop};
+//!use winit::window::{Window, WindowAttributes, WindowId};
+//!
+//!use softbuffer_rgb::RgbBuffer;
+//!
+//!const X: usize = 400;
+//!const Y: usize = 300;
+//!
+//!fn main() {
+//!    let mut app = App::default();
+//!    let event_loop = EventLoop::new().unwrap();
+//!    event_loop.run_app(&mut app).unwrap();
+//!}
+//!
+//!#[derive(Default)]
+//!struct App {
+//!    window: Option<Window>,
+//!}
+//!
+//!impl ApplicationHandler for App {
+//!    fn resumed(&mut self, _: &ActiveEventLoop) {}
+//!
+//!    fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
+//!        if let StartCause::Init = cause {
+//!            let window_attributes =
+//!                WindowAttributes::default().with_inner_size(LogicalSize::new(X as u32, Y as u32));
+//!            // Create the window.
+//!            self.window = Some(event_loop.create_window(window_attributes).unwrap());
+//!            // Get the window.
+//!            let window = self.window.as_ref().unwrap();
+//!            let context = Context::new(window).unwrap();
+//!            let mut surface = Surface::new(&context, &window).unwrap();
+//!            surface
+//!                .resize(
+//!                    NonZeroU32::new(X as u32).unwrap(),
+//!                    NonZeroU32::new(Y as u32).unwrap(),
+//!                )
+//!                .unwrap();
+//!            let mut rgb_buffer =
+//!                RgbBuffer::<X, Y, _, _>::from_softbuffer(surface.buffer_mut().unwrap()).unwrap();
+//!            rgb_buffer.set_pixel(12, 12, &[200, 100, 30]).unwrap();
+//!            event_loop.exit();
+//!        }
+//!    }
+//!
+//!    fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
+//!}
+//!```
+
 use std::slice;
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+pub use softbuffer;
 use softbuffer::Buffer;
 use thiserror::Error;
 
@@ -14,12 +73,32 @@ pub enum RgbBufferError {
 
 pub type Color = [u8; 3];
 
+/// An `RgbBuffer` contains a softbuffer `buffer` and `pixels`, a mutable slice of the same data.
+/// `buffer` and `pixels` reference the same underlying data.
+/// Modifying the elements of one will affect the values of the other.
+/// 
+/// In terms of speed:
+/// 
+/// - Setting values in `pixels` is approximately 6 times faster than setting raw values in `buffer` because you don't need to convert (x, y) coordinates to index values.
+/// - `set_pixel_unchecked(x, y, color)` is slightly slower than setting raw values in `buffer`.
+/// - `set_pixels_unchecked(positions, color)` is approximately 10 times faster than setting raw values in `buffer` (assuming that you've already cached `positions`).
+/// - `fill(color)` is the same speed as `buffer.fill(value)`.
+/// - `fill_rectangle_unchecked(x, y, w, h, color)` is *100 times faster* than filling a rectangle in the raw `buffer`.
+/// 
+/// Many functions have checked and unchecked versions.
+/// The checked functions will check whether all values are within the bounds of `pixels`.
+/// The unchecked functions don't do this and are therefore faster.
+/// 
+/// In `self.pixels`, color data is represented as a 4-element array where the first element is always 0.
+/// This will align the color data correctly for `softbuffer`.
+/// In all functions, `color` is a 3-element array that internally is converted into a valid 4-element array.
 pub struct RgbBuffer<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle> {
-    /// The "raw" softbuffer buffer.
+    /// The "raw" softbuffer `Buffer`.
     pub buffer: Buffer<'s, D, W>,
     /// The "raw" RGB pixel data as a 3D array where the axes are: `Y`, `X`, and 4 (XRGB).
     /// Note that the order is: `Y, X`. Therefore, to get the pixel at `x=4, y=5`: `self.pixels[y][x]`.
-    /// The color has four elements. The first element should always be 0, and the other three are R, G, and B.
+    /// The color has four elements. The first element should always be 0, and the other three are R, G, and B: `self.pixels[y][x] = [0, 200, 160, 30];`
+    /// This will align the color data correctly for `softbuffer`.
     pub pixels: &'s mut [[[u8; 4]; X]],
 }
 
@@ -27,7 +106,7 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
     RgbBuffer<'s, X, Y, D, W>
 {
     /// Convert a `Buffer` into an `RgbBuffer`. This consumes `buffer` and returns an `RgbBuffer`.
-    /// This returns an `Err` if `X * Y != buffer.len()` (i.e. if the dimensions of the `RgbBuffer` are incorrect).
+    /// This returns an `Err` if `X * Y != buffer.len()` (i.e. if the dimensions of the `RgbBuffer` are invalid).
     pub fn from_softbuffer(mut buffer: Buffer<'s, D, W>) -> Result<Self, RgbBufferError> {
         // Test whether the dimensions are valid.
         if X * Y != buffer.len() {
