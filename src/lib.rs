@@ -190,9 +190,7 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
     ///
     /// Panics if `(x, y)` is out of bounds.
     pub fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: &Color) {
-        self.pixels[y][x][1] = color[0];
-        self.pixels[y][x][2] = color[1];
-        self.pixels[y][x][3] = color[2];
+        self.pixels[y][x] = [0, color[0], color[1], color[2]];
     }
 
     /// Set the color of multiple pixels.
