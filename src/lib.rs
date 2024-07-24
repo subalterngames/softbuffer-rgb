@@ -1,4 +1,4 @@
-//! **`sotfbuffer-rgb` is a thin wrapper around `softbuffer` that exposes raw buffer data as a 3D array: `(width, height, color)`.**
+//! **`sotfbuffer-rgb` is a wrapper around `softbuffer` that rearranges raw buffer data as a 3D array: `(width, height, color)`.**
 //! The result is much easier to work with while being just as fast as `softbuffer`, and in some cases significantly faster.
 //!
 //! ```rust
