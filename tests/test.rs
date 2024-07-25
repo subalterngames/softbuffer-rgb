@@ -49,26 +49,16 @@ impl ApplicationHandler for App {
             // Set a pixel.
             let x = 12;
             let y = 14;
-            let r = 255;
-            let g = 20;
-            let b = 5;
-            rgb_buffer.set_pixel_unchecked(x, y, &[r, g, b]);
+            let color = [0, 255, 20, 5];
+            rgb_buffer.pixels[y][x] = color;
             // Check that the pixel was set.
-            assert_eq!(rgb_buffer.pixels[y][x], [0, r, g, b]);
-            let softbuffer_value = u32::from_le_bytes([0, r, g, b]);
-            // Test the u32 value.
-            assert_eq!(rgb_buffer.buffer[index(x, y)], softbuffer_value);
+            let sb_color = u32::from_le_bytes(color);
+            assert_eq!(rgb_buffer.buffer[index(x, y)], sb_color);
             // This is ok.
-            assert!(rgb_buffer
-                .fill_rectangle(20, 20, 200, 50, &[67, 200, 80])
-                .is_ok());
-            // This is not ok.
-            assert!(rgb_buffer
-                .fill_rectangle(20, 20, Y * 3, 50, &[67, 200, 80])
-                .is_err());
+            rgb_buffer.fill_rectangle(20, 20, 200, 50, [0, 67, 200, 80]);
             // Test the fill value.
-            rgb_buffer.fill(&[r, g, b]);
-            assert!(rgb_buffer.buffer.iter().all(|v| *v == softbuffer_value));
+            rgb_buffer.fill(color);
+            assert!(rgb_buffer.buffer.iter().all(|v| *v == sb_color));
 
             let x = 30;
             let y = 20;
@@ -76,7 +66,6 @@ impl ApplicationHandler for App {
             let h = 100;
             println!("Draw a rectangle:");
             // Test raw softbuffer.
-            let sb_color = u32::from_le_bytes([0, r, g, b]);
             let mut dts = [0.0; ITS];
             for dt in dts.iter_mut() {
                 let t0 = Instant::now();
@@ -94,7 +83,7 @@ impl ApplicationHandler for App {
             let mut dts = [0.0; ITS];
             for dt in dts.iter_mut() {
                 let t0 = Instant::now();
-                rgb_buffer.fill_rectangle_unchecked(x, y, w, h, &[r, g, b]);
+                rgb_buffer.fill_rectangle(x, y, w, h, color);
                 *dt = (Instant::now() - t0).as_secs_f64();
             }
             println!(
@@ -114,33 +103,16 @@ impl ApplicationHandler for App {
             }
             println!("softbuffer: {}s", (Instant::now() - t0).as_secs_f64());
 
-            // Set with `set_pixel_unchecked`
-            let t0 = Instant::now();
-            let color = [r, g, b];
-            for x in 0..X {
-                for y in 0..Y {
-                    rgb_buffer.set_pixel_unchecked(x, y, &color);
-                }
-            }
-            println!(
-                "softbuffer-rgb (set_pixel_unchecked): {}s",
-                (Instant::now() - t0).as_secs_f64()
-            );
-
             // Set by setting raw pixel data.
             let t0 = Instant::now();
-            let color_4 = [0, r, g, b];
             for x in 0..X {
                 for y in 0..Y {
-                    rgb_buffer.pixels[y][x] = color_4;
+                    rgb_buffer.pixels[y][x] = color;
                 }
             }
-            println!(
-                "softbuffer-rgb (raw pixels): {}s",
-                (Instant::now() - t0).as_secs_f64()
-            );
+            println!("softbuffer-rgb: {}s", (Instant::now() - t0).as_secs_f64());
 
-            // Set by `set_pixels_unchecked`.
+            // Set by `set_pixels`.
             let mut positions = vec![];
             for x in 0..X {
                 for y in 0..Y {
@@ -148,9 +120,9 @@ impl ApplicationHandler for App {
                 }
             }
             let t0 = Instant::now();
-            rgb_buffer.set_pixels_unchecked(&positions, &color);
+            rgb_buffer.set_pixels(&positions, color);
             println!(
-                "softbuffer-rgb (set_pixels_unchecked): {}s",
+                "softbuffer-rgb (set_pixels): {}s",
                 (Instant::now() - t0).as_secs_f64()
             );
 

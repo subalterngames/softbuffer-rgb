@@ -1,6 +1,34 @@
 //! **`sotfbuffer-rgb` is a wrapper around `softbuffer` that rearranges raw buffer data as a 3D array: `(width, height, color)`.**
 //! The result is much easier to work with while being just as fast as `softbuffer`, and in some cases significantly faster.
 //!
+//! ## The Problem
+//!
+//! `softbuffer` stores pixel data in a u32 buffer where each u32 is an "0RGB" color.
+//! The first byte is always zero, the second byte is red, the third byte is green, and the fourth byte is blue.
+//!
+//! Thus:
+//!
+//! - While we might want to describe a color as a three-element array, we must add a 0 at the start: `let color = [0, 200, 70, 10];`
+//!- `softbuffer` can't use the above example. You must convert it to a u32: `let color = u32::from_le_bytes([0, 200, 70, 10])'`. Converting from a more-intuitive array to a less-intuitive u32 is an operation and there costs time.
+//!
+//! Additionally, `softbuffer` buffers are one-dimensional. Typically, you'll want to program in a 2D (x, y) coordinate space, meaning that you'll have to convert 2D (x, y) coordinates to 1D indices. It's a cheap operation but if you have to do it for many pixels, per frame, the performance cost can add up!
+//!
+//! ## The Solution
+//!
+//! `softbuffer-rgb` uses a tiny bit of unsafe code to rearrange the raw buffer data into a 3D array: `(width, height, 0RGB)`.
+//! Modifying this `pixels` array will modify the the underlying u32 buffer array, and vice versa.
+//!
+//! As a result:
+//!
+//! - `softbuffer-rgb` can be easier to use than `softbuffer`.
+//! - `softbuffer-rgb` can, in many cases, be faster, simply because you don't need to convert to u32s and you don't need to convert (x, y) coordinates to indices.
+//!
+//! ## The Caveat
+//!
+//! `softbuffer-rgb` relies on generic constants to define the size of `pixels`, meaning that the buffer size must be known at compile-time.
+//!
+//! ## The Example
+//!
 //! ```rust
 //!use softbuffer::{Context, Surface};
 //!use std::num::NonZeroU32;
@@ -47,7 +75,9 @@
 //!                .unwrap();
 //!            let mut rgb_buffer =
 //!                RgbBuffer::<X, Y, _, _>::from_softbuffer(surface.buffer_mut().unwrap()).unwrap();
-//!            rgb_buffer.set_pixel(12, 12, &[200, 100, 30]).unwrap();
+//!            let x = 12;
+//!            let y = 23;
+//!            rgb_buffer.pixels[y][x] = [0, 200, 100, 70];
 //!            event_loop.exit();
 //!        }
 //!    }
@@ -71,27 +101,15 @@ pub enum RgbBufferError {
     InvalidPosition(usize, usize),
 }
 
-pub type Color = [u8; 3];
+pub type Color = [u8; 4];
 
 /// An `RgbBuffer` contains a softbuffer `buffer` and `pixels`, a mutable slice of the same data.
 /// `buffer` and `pixels` reference the same underlying data.
 /// Modifying the elements of one will affect the values of the other.
-/// 
-/// In terms of speed:
-/// 
-/// - Setting values in `pixels` is approximately 6 times faster than setting raw values in `buffer` because you don't need to convert (x, y) coordinates to index values.
-/// - `set_pixel_unchecked(x, y, color)` is slightly slower than setting raw values in `buffer`.
-/// - `set_pixels_unchecked(positions, color)` is approximately 10 times faster than setting raw values in `buffer` (assuming that you've already cached `positions`).
-/// - `fill(color)` is the same speed as `buffer.fill(value)`.
-/// - `fill_rectangle_unchecked(x, y, w, h, color)` is *100 times faster* than filling a rectangle in the raw `buffer`.
-/// 
-/// Many functions have checked and unchecked versions.
-/// The checked functions will check whether all values are within the bounds of `pixels`.
-/// The unchecked functions don't do this and are therefore faster.
-/// 
-/// In `self.pixels`, color data is represented as a 4-element array where the first element is always 0.
+///
+///
+/// Color data is represented as a 4-element array where the first element is always 0.
 /// This will align the color data correctly for `softbuffer`.
-/// In all functions, `color` is a 3-element array that internally is converted into a valid 4-element array.
 pub struct RgbBuffer<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle> {
     /// The "raw" softbuffer `Buffer`.
     pub buffer: Buffer<'s, D, W>,
@@ -120,92 +138,21 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         }
     }
 
-    /// Set the color of a single pixel.
-    /// `color` is the `[r, g, b]` color.
-    ///
-    /// Returns an `Err` if `(x, y)` is out of bounds.
-    pub fn set_pixel(&mut self, x: usize, y: usize, color: &Color) -> Result<(), RgbBufferError> {
-        if !Self::is_valid_position(x, y) {
-            Err(RgbBufferError::InvalidPosition(x, y))
-        } else {
-            self.set_pixel_unchecked(x, y, color);
-            Ok(())
-        }
+    /// Fill the buffer with an `[0, r, g, b]` color.
+    pub fn fill(&mut self, color: Color) {
+        self.buffer.fill(u32::from_le_bytes(color));
     }
 
     /// Set the color of multiple pixels.
     ///
     /// - `positions`: A slice of `(x, y)` positions.
-    /// - `color`: The `[r, g, b]` color.
-    ///
-    /// Returns an `Err` if any position in `positions` is out of bounds.
-    pub fn set_pixels(
-        &mut self,
-        positions: &[(usize, usize)],
-        color: &Color,
-    ) -> Result<(), RgbBufferError> {
-        // Check the positions.
-        for &(x, y) in positions {
-            if !Self::is_valid_position(x, y) {
-                return Err(RgbBufferError::InvalidPosition(x, y));
-            }
-        }
-        self.set_pixels_unchecked(positions, color);
-        Ok(())
-    }
-
-    /// Fill a rectangle with a color.
-    ///
-    /// - `x` and `y` are the coordinates of the top-left pixel.
-    /// - `w` and `h` are the width and height of the rectangle.
-    /// - `color` is the `[r, g, b]` color.
-    ///
-    /// Returns an `Err` if the top-left or bottom-right positions are out of bounds.
-    pub fn fill_rectangle(
-        &mut self,
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
-        color: &Color,
-    ) -> Result<(), RgbBufferError> {
-        if !Self::is_valid_position(x, y) {
-            Err(RgbBufferError::InvalidPosition(x, y))
-        } else if !Self::is_valid_position(x + w, y + h) {
-            Err(RgbBufferError::InvalidPosition(x + w, y + h))
-        } else {
-            self.fill_rectangle_unchecked(x, y, w, h, color);
-            Ok(())
-        }
-    }
-
-    /// Fill the buffer with an `[r, g, b]` color.
-    pub fn fill(&mut self, color: &Color) {
-        self.buffer
-            .fill(u32::from_le_bytes([0, color[0], color[1], color[2]]));
-    }
-
-    /// Set the color of a single pixel.
-    /// `color` is the `[r, g, b]` color.
-    ///
-    /// Panics if `(x, y)` is out of bounds.
-    pub fn set_pixel_unchecked(&mut self, x: usize, y: usize, color: &Color) {
-        self.pixels[y][x][1..4].copy_from_slice(color);
-    }
-
-    /// Set the color of multiple pixels.
-    ///
-    /// - `positions`: A slice of `(x, y)` positions.
-    /// - `color`: The `[r, g, b]` color.
+    /// - `color`: The `[0, r, g, b]` color.
     ///
     /// Panics if any position in `positions` is out of bounds.
-    pub fn set_pixels_unchecked(&mut self, positions: &[(usize, usize)], color: &Color) {
-        // Convert the color to a softbuffer value.
-        let mut rgb = [0; 4];
-        rgb[1..4].copy_from_slice(color);
+    pub fn set_pixels(&mut self, positions: &[(usize, usize)], color: Color) {
         // Copy the color into each position.
         for position in positions {
-            self.pixels[position.1][position.0] = rgb;
+            self.pixels[position.1][position.0] = color;
         }
     }
 
@@ -213,29 +160,15 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
     ///
     /// - `x` and `y` are the coordinates of the top-left pixel.
     /// - `w` and `h` are the width and height of the rectangle.
-    /// - `color` is the `[r, g, b]` color.
+    /// - `color` is the `[0, r, g, b]` color.
     ///
     /// Panics if the top-left or bottom-right positions are out of bounds.
-    pub fn fill_rectangle_unchecked(
-        &mut self,
-        x: usize,
-        y: usize,
-        w: usize,
-        h: usize,
-        color: &Color,
-    ) {
-        // Convert the color to a softbuffer value.
-        let mut rgb = [0; 4];
-        rgb[1..4].copy_from_slice(color);
+    pub fn fill_rectangle(&mut self, x: usize, y: usize, w: usize, h: usize, color: Color) {
         // Create a row of colors and get a slice of it.
-        let rgbs = &[rgb; Y][x..x + w];
+        let colors = &[color; Y][x..x + w];
         // Fill the rectangle.
         self.pixels[y..y + h]
             .iter_mut()
-            .for_each(|row| row[x..x + w].copy_from_slice(rgbs));
-    }
-
-    fn is_valid_position(x: usize, y: usize) -> bool {
-        x < X && y < Y
+            .for_each(|cols| cols[x..x + w].copy_from_slice(colors));
     }
 }
