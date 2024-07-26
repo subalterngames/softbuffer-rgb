@@ -12,5 +12,8 @@ winit = "0.30.4"
 
 [[test]]
 name = "test"
-path = "tests/test.rs"
+harness = false
+
+[[bench]]
+name = "bench"
 harness = false

@@ -154,7 +154,7 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
         let cols = [color; X];
         self.pixels
             .iter_mut()
-            .for_each(|c| c.copy_from_slice(&cols));
+            .for_each(|c| *c = cols);
     }
 
     /// Set the color of multiple pixels.
