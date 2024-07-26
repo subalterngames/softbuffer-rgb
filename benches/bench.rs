@@ -88,10 +88,7 @@ impl ApplicationHandler for App {
                     rgb_buffer.pixels[y][x] = rgb4[x][y];
                 }
             }
-            println!(
-                "softbuffer-rgb: {}s",
-                (Instant::now() - t0).as_secs_f64()
-            );
+            println!("softbuffer-rgb: {}s", (Instant::now() - t0).as_secs_f64());
 
             // Blit "Hello World!" to the buffer.
             // Convert raw bytes to values.
