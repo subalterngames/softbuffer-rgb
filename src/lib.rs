@@ -1,18 +1,38 @@
-//! **`softbuffer-rgb` is a wrapper around `softbuffer` that makes it easier to modify a raw pixel buffer.
+//! **`softbuffer-rgb` is a wrapper around `softbuffer` that makes it easier to modify a raw pixel buffer.**
+//! 
+//! Instead of doing this:
+//! 
+//! ```ignore
+//! buffer.buffer_mut()[y * width + x] = u32::from_le_bytes([0, 200, 70, 10]);
+//! ```
+//! 
+//! ...you can now do this:
+//! 
+//! ```ignore
+//! buffer.pixels[y][x] = [0, 200, 70, 10];
+//! ```
 //!
-//! ## The Problem
+//! ## Problem
 //!
 //! `softbuffer` stores pixel data in a u32 buffer where each u32 is an "0RGB" color.
 //! The first byte is always zero, the second byte is red, the third byte is green, and the fourth byte is blue.
 //!
-//! Thus:
+//! It's intuitive to store colors as arrays, like this: 
+//! 
+//!```rust
+//!let color = [0, 200, 70, 10];
+//!```
+//! But in `softbuffer`, colors need to be u32s:
+//! 
+//!```rust
+//!let color = u32::from_le_bytes([0, 200, 70, 10]);
+//!```
 //!
-//! - While we might want to describe a color as a three-element array, we must add a 0 at the start: `let color = [0, 200, 70, 10];`
-//!- `softbuffer` can't use the above example. You must convert it to a u32: `let color = u32::from_le_bytes([0, 200, 70, 10])'`. Converting from a more-intuitive array to a less-intuitive u32 is an operation and there costs time.
+//! Additionally, `softbuffer` buffers are one-dimensional. 
+//! Typically, you'll want to program in a 2D (x, y) coordinate space, meaning that you'll have to convert 2D (x, y) coordinates to 1D indices. 
+//! It's a cheap operation but if you have to do it for many pixels, per frame, the performance cost can add up!
 //!
-//! Additionally, `softbuffer` buffers are one-dimensional. Typically, you'll want to program in a 2D (x, y) coordinate space, meaning that you'll have to convert 2D (x, y) coordinates to 1D indices. It's a cheap operation but if you have to do it for many pixels, per frame, the performance cost can add up!
-//!
-//! ## The Solution
+//! ## Solution
 //!
 //! `softbuffer-rgb` uses a tiny bit of unsafe code to rearrange the raw buffer data into a 3D array: `(width, height, 0RGB)`.
 //! Modifying this `pixels` array will modify the the underlying u32 buffer array, and vice versa.
@@ -20,13 +40,13 @@
 //! As a result:
 //!
 //! - `softbuffer-rgb` can be easier to use than `softbuffer`.
-//! - `softbuffer-rgb` can be slightly faster, simply because you don't need to convert to u32s and you don't need to convert (x, y) coordinates to indices.
+//! - `softbuffer-rgb` can be slightly faster because you don't need to convert to u32s and you don't need to convert (x, y) coordinates to indices.
 //!
-//! ## The Caveat
+//! ## Caveat
 //!
 //! `softbuffer-rgb` relies on generic constants to define the size of `pixels`, meaning that the buffer size must be known at compile-time.
 //!
-//! ## The Example
+//! ## Example
 //!
 //! ```rust
 //!use softbuffer::{Context, Surface};
