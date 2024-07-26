@@ -1,12 +1,13 @@
 [package]
 name = "softbuffer-rgb"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A wrapper around softbuffer that makes it easier to modify a raw pixel buffer."
 authors = ["Esther Alter <subalterngames@gmail.com>"]
 license = "MIT"
 keywords = ["softbuffer", "framebuffer", "windowing"]
 categories = ["rendering"]
+repository = "https://github.com/subalterngames/softbuffer-rgb"
 
 [dependencies]
 raw-window-handle = "0.6.2"
