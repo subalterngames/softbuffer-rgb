@@ -1,3 +1,4 @@
+use std::slice;
 use std::time::Instant;
 
 use softbuffer::{Context, Surface};
@@ -12,6 +13,8 @@ use softbuffer_rgb::RgbBuffer;
 
 const X: usize = 400;
 const Y: usize = 300;
+const RANDOM_COLORS: &[u8; X * Y * 3] = include_bytes!("colors");
+const HELLO_WORLD: &[u8; 87528] = include_bytes!("hello_world");
 const ITS: usize = 10;
 
 fn main() {
@@ -46,6 +49,7 @@ impl ApplicationHandler for App {
                 .unwrap();
             let mut rgb_buffer =
                 RgbBuffer::<X, Y, _, _>::from_softbuffer(surface.buffer_mut().unwrap()).unwrap();
+
             // Set a pixel.
             let x = 12;
             let y = 14;
@@ -60,10 +64,83 @@ impl ApplicationHandler for App {
             rgb_buffer.fill(color);
             assert!(rgb_buffer.buffer.iter().all(|v| *v == sb_color));
 
+            // Set random colors for every pixel.
+            println!("Set every pixel to a random color:");
+
+            // Convert `COLORS` into a 3D RGB array.
+            let ptr = RANDOM_COLORS.as_ptr() as *const [[u8; 3]; X];
+            let rgb3 = unsafe { slice::from_raw_parts(ptr, Y) };
+
+            // Convert `COLORS` into u32s.
+            let mut u32s = [[0; Y]; X];
+            for (x, row) in rgb3.iter().enumerate() {
+                for (y, color) in row.iter().enumerate() {
+                    u32s[y][x] = u32::from_le_bytes([0, color[0], color[1], color[2]]);
+                }
+            }
+
+            // Raw softbuffer.
+            let mut t0 = Instant::now();
+            for x in 0..X {
+                for y in 0..Y {
+                    rgb_buffer.buffer[index(x, y)] = u32s[x][y];
+                }
+            }
+            println!("softbuffer: {}s", (Instant::now() - t0).as_secs_f64());
+
+            // Raw pixels.
+            // Convert `COLORS` into a 4D XRGB array.
+            let mut rgb4 = [[[0u8; 4]; Y]; X];
+            for (x, row) in rgb3.iter().enumerate() {
+                for (y, color) in row.iter().enumerate() {
+                    rgb4[y][x] = [0, color[0], color[1], color[2]];
+                }
+            }
+            t0 = Instant::now();
+            for x in 0..X {
+                for y in 0..Y {
+                    rgb_buffer.pixels[y][x] = rgb4[x][y];
+                }
+            }
+            println!(
+                "softbuffer-rgb (`self.pixel`): {}s",
+                (Instant::now() - t0).as_secs_f64()
+            );
+
+            // Blit "Hello World!" to the buffer.
+            // Convert raw bytes to values.
+            let mut positions = vec![];
+            for raw_position in HELLO_WORLD.chunks_exact(4) {
+                positions.push((
+                    u16::from_le_bytes([raw_position[0], raw_position[1]]) as usize,
+                    u16::from_le_bytes([raw_position[2], raw_position[3]]) as usize,
+                ));
+            }
+
+            println!("");
+            println!("Set multiple pixels of the same color:");
+
+            // Softbuffer.
+            t0 = Instant::now();
+            for position in positions.iter() {
+                rgb_buffer.buffer[index(position.0, position.1)] = 0;
+            }
+            println!("softbuffer: {}s", (Instant::now() - t0).as_secs_f64());
+
+            // `set_pixels`
+            let hello_world_color = [0, 0, 0, 0];
+            t0 = Instant::now();
+            let _ = rgb_buffer.set_pixels(&positions, hello_world_color);
+            println!(
+                "softbuffer-rbg (set_pixels): {}s",
+                (Instant::now() - t0).as_secs_f64()
+            );
+
             let x = 30;
             let y = 20;
             let w = 200;
             let h = 100;
+            println!("");
             println!("Draw a rectangle:");
             // Test raw softbuffer.
             let mut dts = [0.0; ITS];
@@ -89,41 +166,6 @@ impl ApplicationHandler for App {
             println!(
                 "softbuffer-rgb: {}s",
                 dts.iter().sum::<f64>() / dts.iter().len() as f64
-            );
-
-            // Set per-pixel.
-            println!("\nSet every pixel individually:");
-
-            // Set with raw softbuffer.
-            let t0 = Instant::now();
-            for x in 0..X {
-                for y in 0..Y {
-                    rgb_buffer.buffer[index(x, y)] = sb_color;
-                }
-            }
-            println!("softbuffer: {}s", (Instant::now() - t0).as_secs_f64());
-
-            // Set by setting raw pixel data.
-            let t0 = Instant::now();
-            for x in 0..X {
-                for y in 0..Y {
-                    rgb_buffer.pixels[y][x] = color;
-                }
-            }
-            println!("softbuffer-rgb: {}s", (Instant::now() - t0).as_secs_f64());
-
-            // Set by `set_pixels`.
-            let mut positions = vec![];
-            for x in 0..X {
-                for y in 0..Y {
-                    positions.push((x, y));
-                }
-            }
-            let t0 = Instant::now();
-            rgb_buffer.set_pixels(&positions, color);
-            println!(
-                "softbuffer-rgb (set_pixels): {}s",
-                (Instant::now() - t0).as_secs_f64()
             );
 
             // End.
