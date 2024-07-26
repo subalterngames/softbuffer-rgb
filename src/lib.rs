@@ -20,7 +20,7 @@
 //! As a result:
 //!
 //! - `softbuffer-rgb` can be easier to use than `softbuffer`.
-//! - `softbuffer-rgb` can, in many cases, be faster, simply because you don't need to convert to u32s and you don't need to convert (x, y) coordinates to indices.
+//! - `softbuffer-rgb` can be slightly faster, simply because you don't need to convert to u32s and you don't need to convert (x, y) coordinates to indices.
 //!
 //! ## The Caveat
 //!
@@ -149,26 +149,20 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
     }
 
     /// Fill the buffer with an `[0, r, g, b]` color.
-    /// This is significantly faster than calling `softbuffer::Buffer::fill(value)`.
     pub fn fill(&mut self, color: Color) {
-        let cols = [color; X];
-        self.pixels
-            .iter_mut()
-            .for_each(|c| *c = cols);
+        self.pixels.fill([color; X]);
     }
 
     /// Set the color of multiple pixels.
     ///
-    /// - `positions`: A slice of `(x, y)` positions.
+    /// - `positions`: A slice of `[x, y]` positions.
     /// - `color`: The `[0, r, g, b]` color.
     ///
-    /// This can be faster than modifying `self.buffer` because you don't need to convert the color into a u32 or the `positions` into indices.
-    ///
     /// Panics if any position in `positions` is out of bounds.
-    pub fn set_pixels(&mut self, positions: &[(usize, usize)], color: Color) {
+    pub fn set_pixels(&mut self, positions: &[[usize; 2]], color: Color) {
         // Copy the color into each position.
         for position in positions {
-            self.pixels[position.1][position.0] = color;
+            self.pixels[position[1]][position[0]] = color;
         }
     }
 

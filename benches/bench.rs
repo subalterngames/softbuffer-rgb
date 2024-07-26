@@ -97,10 +97,10 @@ impl ApplicationHandler for App {
             // Convert raw bytes to values.
             let mut positions = vec![];
             for raw_position in HELLO_WORLD.chunks_exact(4) {
-                positions.push((
+                positions.push([
                     u16::from_le_bytes([raw_position[0], raw_position[1]]) as usize,
                     u16::from_le_bytes([raw_position[2], raw_position[3]]) as usize,
-                ));
+                ]);
             }
 
             println!("");
@@ -109,7 +109,7 @@ impl ApplicationHandler for App {
             // Softbuffer.
             t0 = Instant::now();
             for position in positions.iter() {
-                rgb_buffer.buffer[index(position.0, position.1)] = 0;
+                rgb_buffer.buffer[index(position[0], position[1])] = 0;
             }
             println!("softbuffer: {}s", (Instant::now() - t0).as_secs_f64());
 
