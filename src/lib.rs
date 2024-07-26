@@ -1,5 +1,4 @@
-//! **`sotfbuffer-rgb` is a wrapper around `softbuffer` that rearranges raw buffer data as a 3D array: `(width, height, color)`.**
-//! The result is much easier to work with while being just as fast as `softbuffer`, and in some cases significantly faster.
+//! **`softbuffer-rgb` is a wrapper around `softbuffer` that makes it easier and faster to modify a raw pixel buffer.
 //!
 //! ## The Problem
 //!
@@ -86,19 +85,22 @@
 //!}
 //!```
 
-use std::slice;
+use std::{fmt, slice};
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 pub use softbuffer;
 use softbuffer::Buffer;
-use thiserror::Error;
 
-#[derive(Error, Debug)]
-pub enum RgbBufferError {
-    #[error("Invalid size: ({0}, {1})")]
-    InvalidSize(usize, usize),
-    #[error("Invalid (x, y) coordinates: ({0}, {1})")]
-    InvalidPosition(usize, usize),
+#[derive(Debug, Clone)]
+pub struct SizeError {
+    pub x: usize,
+    pub y: usize,
+}
+
+impl fmt::Display for SizeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Invalid size: ({0}, {1})", self.x, self.y)
+    }
 }
 
 pub type Color = [u8; 4];
@@ -107,9 +109,13 @@ pub type Color = [u8; 4];
 /// `buffer` and `pixels` reference the same underlying data.
 /// Modifying the elements of one will affect the values of the other.
 ///
-///
 /// Color data is represented as a 4-element array where the first element is always 0.
 /// This will align the color data correctly for `softbuffer`.
+///
+/// Generic parameters:
+///
+/// - `X` and `Y` are the width and height of the surface. This should always match the actual dimensions of the underlying `Surface`.
+/// - `D` and `W` are generics that should match those of the `Buffer<D, W>`.
 pub struct RgbBuffer<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle> {
     /// The "raw" softbuffer `Buffer`.
     pub buffer: Buffer<'s, D, W>,
@@ -117,6 +123,10 @@ pub struct RgbBuffer<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W:
     /// Note that the order is: `Y, X`. Therefore, to get the pixel at `x=4, y=5`: `self.pixels[y][x]`.
     /// The color has four elements. The first element should always be 0, and the other three are R, G, and B: `self.pixels[y][x] = [0, 200, 160, 30];`
     /// This will align the color data correctly for `softbuffer`.
+    ///
+    /// Do not reassign the entire array!
+    /// It's a slice of `self.buffer`.
+    /// If it's something else, something bad might happen!
     pub pixels: &'s mut [[Color; X]],
 }
 
@@ -124,11 +134,11 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
     RgbBuffer<'s, X, Y, D, W>
 {
     /// Convert a `Buffer` into an `RgbBuffer`. This consumes `buffer` and returns an `RgbBuffer`.
-    /// This returns an `Err` if `X * Y != buffer.len()` (i.e. if the dimensions of the `RgbBuffer` are invalid).
-    pub fn from_softbuffer(mut buffer: Buffer<'s, D, W>) -> Result<Self, RgbBufferError> {
+    /// This returns an `Error` if `X * Y != buffer.len()` (i.e. if the dimensions of the `RgbBuffer` are invalid).
+    pub fn from_softbuffer(mut buffer: Buffer<'s, D, W>) -> Result<Self, SizeError> {
         // Test whether the dimensions are valid.
         if X * Y != buffer.len() {
-            Err(RgbBufferError::InvalidSize(X, Y))
+            Err(SizeError { x: X, y: Y })
         } else {
             // Convert the raw buffer to an array of rows.
             let ptr = buffer.as_mut_ptr() as *mut [Color; X];
@@ -139,14 +149,20 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
     }
 
     /// Fill the buffer with an `[0, r, g, b]` color.
+    /// This is significantly faster than calling `softbuffer::Buffer::fill(value)`.
     pub fn fill(&mut self, color: Color) {
-        self.buffer.fill(u32::from_le_bytes(color));
+        let cols = [color; X];
+        self.pixels
+            .iter_mut()
+            .for_each(|c| c.copy_from_slice(&cols));
     }
 
     /// Set the color of multiple pixels.
     ///
     /// - `positions`: A slice of `(x, y)` positions.
     /// - `color`: The `[0, r, g, b]` color.
+    ///
+    /// This can be faster than modifying `self.buffer` because you don't need to convert the color into a u32 or the `positions` into indices.
     ///
     /// Panics if any position in `positions` is out of bounds.
     pub fn set_pixels(&mut self, positions: &[(usize, usize)], color: Color) {

@@ -168,6 +168,14 @@ impl ApplicationHandler for App {
                 dts.iter().sum::<f64>() / dts.iter().len() as f64
             );
 
+            println!("");
+            println!("Fill screen:");
+            t0 = Instant::now();
+            rgb_buffer.buffer.fill(sb_color);
+            println!("softbuffer: {}s", (Instant::now() - t0).as_secs_f64());
+            t0 = Instant::now();
+            rgb_buffer.fill(color);
+            println!("softbuffer-rbg: {}s", (Instant::now() - t0).as_secs_f64());
             // End.
             event_loop.exit();
         }
