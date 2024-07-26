@@ -117,7 +117,7 @@ pub struct RgbBuffer<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W:
     /// Note that the order is: `Y, X`. Therefore, to get the pixel at `x=4, y=5`: `self.pixels[y][x]`.
     /// The color has four elements. The first element should always be 0, and the other three are R, G, and B: `self.pixels[y][x] = [0, 200, 160, 30];`
     /// This will align the color data correctly for `softbuffer`.
-    pub pixels: &'s mut [[[u8; 4]; X]],
+    pub pixels: &'s mut [[Color; X]],
 }
 
 impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle>
@@ -131,7 +131,7 @@ impl<'s, const X: usize, const Y: usize, D: HasDisplayHandle, W: HasWindowHandle
             Err(RgbBufferError::InvalidSize(X, Y))
         } else {
             // Convert the raw buffer to an array of rows.
-            let ptr = buffer.as_mut_ptr() as *mut [[u8; 4]; X];
+            let ptr = buffer.as_mut_ptr() as *mut [Color; X];
             // Get the 3D pixel array.
             let pixels = unsafe { slice::from_raw_parts_mut(ptr, Y) };
             Ok(RgbBuffer { buffer, pixels })
