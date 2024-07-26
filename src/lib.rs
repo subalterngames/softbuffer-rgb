@@ -1,4 +1,4 @@
-//! **`softbuffer-rgb` is a wrapper around `softbuffer` that makes it easier and faster to modify a raw pixel buffer.
+//! **`softbuffer-rgb` is a wrapper around `softbuffer` that makes it easier to modify a raw pixel buffer.
 //!
 //! ## The Problem
 //!
